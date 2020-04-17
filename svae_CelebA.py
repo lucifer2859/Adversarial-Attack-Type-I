@@ -32,7 +32,6 @@ pretrain_epoch_num = [-1, -1]
 stage_flag = [True, True]
 batch_size = 64
 dim_z = 1024
-classes = 2
 lr = 0.0002
 z_lr = 0.005
 J1_hat = 1.00
