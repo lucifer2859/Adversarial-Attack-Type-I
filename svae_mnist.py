@@ -309,18 +309,19 @@ elif sys.argv[1] == 'generate':
     test_label = np.argmax(y_test[test_img_index, ...]).squeeze()
 
     test_img = x_test[test_img_index, ...]
-    true_label = np.zeros(shape=[1, 1])
-    true_label[0, 0] = test_label
+    true_label = np.zeros(shape=[1, ])
+    true_label[0] = test_label
 
-    target_label = np.zeros(shape=[1, 1])
-    target_label[0, 0] = target_img_label
+    target_label = np.zeros(shape=[1, ])
+    target_label[0] = target_img_label
     
-    plt.imsave('attack/mnist/test.png', test_img)
+    img = np.repeat(test_img.transpose((1,2,0)), 3, axis=2)
+    plt.imsave('attack/mnist/test.png', img)
 
-    encoder.load_state_dict(torch.load('out/mnist/encoder.pth'))
-    generator.load_state_dict(torch.load('out/mnist/generator.pth'))
-    classifier.load_state_dict(torch.load('out/mnist/classifier.pth'))
-    discriminator.load_state_dict(torch.load('out/mnist/discriminator.pth'))
+    encoder.load_state_dict(torch.load('out/mnist/encoder_best_551.pth'))
+    generator.load_state_dict(torch.load('out/mnist/generator_best_551.pth'))
+    classifier.load_state_dict(torch.load('out/mnist/classifier_best_551.pth'))
+    discriminator.load_state_dict(torch.load('out/mnist/discriminator_best_544.pth'))
 
     f1.load_state_dict(torch.load('out/mnist/f1_best_178.pth'))
 
@@ -367,6 +368,7 @@ elif sys.argv[1] == 'generate':
         if (it % 1000 == 0):
             print('iter-%d: J_SA: %.4f, J_IT: %.4f, J1: %.4f' % (it, J_SA.item(), J_IT.item(), J1.item()))
             img = torch.squeeze(X_hat).data.cpu().numpy()
+            img = np.repeat(img[..., np.newaxis], 3, axis=2)
             plt.imsave('attack/mnist/iter-%d.png' % (it), img)
 
         # Backward
