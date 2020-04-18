@@ -18,6 +18,8 @@ import itertools
 np.random.seed(996)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+torch.cuda.empty_cache()
+
 EPSILON = 1e-6
 
 IMAGE_SIZE = 28
@@ -337,6 +339,9 @@ elif sys.argv[1] == 'generate':
     for p in discriminator.parameters():
         p.requires_grad = False
 
+    for p in f1.parameters():
+        p.requires_grad = False
+
     X, y = torch.from_numpy(np.expand_dims(test_img, 0)).float().to(device), torch.from_numpy(true_label).long().to(device)
     y_hat = torch.from_numpy(target_label).long().to(device)
 
@@ -362,7 +367,7 @@ elif sys.argv[1] == 'generate':
         J2 = nn.CrossEntropyLoss()(y2, y)
         J_IT = J2 + 0.01 * torch.mean(1 - torch.sigmoid(D)) + 0.0001 * torch.mean(torch.norm(z, dim=1))
         J_SA = J_IT + k * J1
-        k = k + z_lr * (0.001 * J1 - J2 + max(J1 - J1_hat, 0))
+        k = k + z_lr * (0.001 * J1.item() - J2.item() + max(J1.item() - J1_hat, 0))
         k = max(0, min(k, 0.005))
         
         if (it % 1000 == 0):
@@ -372,7 +377,7 @@ elif sys.argv[1] == 'generate':
             plt.imsave('attack/mnist/iter-%d.png' % (it), img)
 
         # Backward
-        J_SA.backward(retain_graph=True)
+        J_SA.backward()
 
         # Update
         z_solver.step()

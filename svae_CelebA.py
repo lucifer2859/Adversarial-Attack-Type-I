@@ -23,6 +23,8 @@ ssl._create_default_https_context = ssl._create_unverified_context
 np.random.seed(996)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+torch.cuda.empty_cache()
+
 EPSILON = 1e-6
 
 IMAGE_SIZE = 64
@@ -366,7 +368,7 @@ elif sys.argv[1] == 'generate':
         J2 = F.binary_cross_entropy(torch.sigmoid(y2), y_hat)
         J_IT = J2 + 0.01 * torch.mean(1 - torch.sigmoid(D)) + 0.0001 * torch.mean(torch.norm(z, dim=1))
         J_SA = J_IT + k * J1
-        k = k + z_lr * (0.001 * J1 - J2 + max(J1 - J1_hat, 0))
+        k += z_lr * (0.001 * J1.item() - J2.item() + max(J1.item() - J1_hat, 0))
         k = max(0, min(k, 0.005))
         
         if (it % 1000 == 0):
@@ -375,7 +377,7 @@ elif sys.argv[1] == 'generate':
             plt.imsave('attack/CelebA/iter-%d.png' % (it), img)
 
         # Backward
-        J_SA.backward(retain_graph=True)
+        J_SA.backward()
 
         # Update
         z_solver.step()
