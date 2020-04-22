@@ -1,7 +1,12 @@
 from keras.datasets import mnist
 from keras.utils import to_categorical
 import numpy as np
+import os
+import cv2
+import random
+import torch
 
+batch_size = 64
 
 def deprocess(x):
     return np.reshape((x * 255.0), (-1, 28, 28)).astype(np.uint8)
@@ -57,3 +62,49 @@ def load_mnist(reshape=True, onehot=True, twoclass=None, binary=False, prep=True
         x_test = preprocess(x_test)
 
     return x_train, y_train, x_test, y_test
+
+
+def load_data(data_path, binary=False, prep=True):
+    data_pairs =[]
+
+    labels = os.listdir(data_path)
+    for label in labels:    
+        filepath = data_path + label
+        filename  = os.listdir(filepath)
+        for fname in filename:
+            ffpath = filepath + "/" + fname
+            data_pair = [ffpath, int(label)]
+            data_pairs.append(data_pair)
+    
+    data_cnt = len(data_pairs)
+    data_x = np.empty((data_cnt, 1, 28, 28), dtype="float32")
+    data_y = []
+
+    random.shuffle(data_pairs)
+
+    i = 0
+    for data_pair in data_pairs:
+        img = cv2.imread(data_pair[0], 0)
+        img = cv2.resize(img, (28, 28))
+        arr = np.asarray(img, dtype="float32")
+        data_x[i, :, :, :] = arr
+        i += 1
+        data_y.append(data_pair[1])
+        
+    if binary:
+        x_temp = np.zeros(data_x.shape, data_x.dtype)
+        x_temp[np.where(data_x > 127)] = 255
+        data_x = x_temp
+
+    if prep:
+        data_x = preprocess(data_x)
+
+    data_y = np.asarray(data_y)
+    data_x = torch.from_numpy(data_x)
+    data_y = torch.from_numpy(data_y)
+
+    dataset = torch.utils.data.TensorDataset(data_x, data_y)
+            
+    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        
+    return loader

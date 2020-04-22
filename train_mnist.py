@@ -112,7 +112,7 @@ for epoch in range(0, epoch_num):
             val_loss += loss.item()
             val_acc += acc.item()
 
-        print('Epoch {}, val_loss:{:.4}'.format(epoch, val_loss / total_test_batch))
+        print('Epoch %d, val_loss: %f' % (epoch, val_loss / total_test_batch))
             
         if (val_loss / total_test_batch) < best_CLA_loss:
             torch.save(f1.state_dict(), 'out/mnist/f1_best_%d.pth' % (epoch))

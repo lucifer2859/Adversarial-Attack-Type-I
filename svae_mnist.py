@@ -48,6 +48,7 @@ if not os.path.exists('attack/mnist/'):
 
 if len(sys.argv) < 2:
     print('Usage: python svae_mnist.py train')
+    print('       python svae_mnist.py generate')
     print('       python svae_mnist.py generate test_index target_label')
     exit(0)
 
@@ -175,7 +176,7 @@ if sys.argv[1] == 'train':
                     val_kl += kl_loss.item()
                     val_acc += acc.item()
 
-                print('val_loss:{:.4}, val_cla:{:.4}, val_rec:{:.4}, val_kl:{:.4}, val_acc:{:.4}'.format(val_loss / total_test_batch,
+                print('val_loss:{:.6}, val_cla:{:.6}, val_rec:{:.6}, val_kl:{:.6}, val_acc:{:.4}'.format(val_loss / total_test_batch,
                                                                                             val_cla / total_test_batch,
                                                                                             val_rec / total_test_batch,
                                                                                             val_kl / total_test_batch,
@@ -281,7 +282,7 @@ if sys.argv[1] == 'train':
                     acc_dis_true += torch.mean(torch.ge(D_real, 0.5).float()).item()
                     acc_dis_fake += torch.mean(torch.lt(D_fake, 0.5).float()).item()
 
-                print('val_loss_dis:{:.4}, acc_dis_true:{:.4}, acc_dis_fake:{:.4}'.format(val_loss_dis / total_test_batch,
+                print('val_loss_dis:{:.6}, acc_dis_true:{:.4}, acc_dis_fake:{:.4}'.format(val_loss_dis / total_test_batch,
                                                                                                acc_dis_true / total_test_batch,
                                                                                                acc_dis_fake / total_test_batch))
                 if (val_loss_dis / total_test_batch) < best_DIS_loss:
@@ -304,22 +305,6 @@ if sys.argv[1] == 'train':
         torch.save(discriminator.state_dict(), 'out/mnist/discriminator.pth')
 
 elif sys.argv[1] == 'generate':
-    test_img_index = int(sys.argv[2])
-    target_img_label = int(sys.argv[3])
-    x_train, y_train, x_test, y_test = mnist_data.load_mnist(reshape=True, twoclass=None, binary=True, onehot=False)
-
-    test_label = np.argmax(y_test[test_img_index, ...]).squeeze()
-
-    test_img = x_test[test_img_index, ...]
-    true_label = np.zeros(shape=[1, ])
-    true_label[0] = test_label
-
-    target_label = np.zeros(shape=[1, ])
-    target_label[0] = target_img_label
-    
-    img = np.repeat(test_img.transpose((1,2,0)), 3, axis=2)
-    plt.imsave('attack/mnist/test.png', img)
-
     encoder.load_state_dict(torch.load('out/mnist/encoder_best_551.pth'))
     generator.load_state_dict(torch.load('out/mnist/generator_best_551.pth'))
     classifier.load_state_dict(torch.load('out/mnist/classifier_best_551.pth'))
@@ -342,47 +327,142 @@ elif sys.argv[1] == 'generate':
     for p in f1.parameters():
         p.requires_grad = False
 
-    X, y = torch.from_numpy(np.expand_dims(test_img, 0)).float().to(device), torch.from_numpy(true_label).long().to(device)
-    y_hat = torch.from_numpy(target_label).long().to(device)
+    x_train, y_train, x_test, y_test = mnist_data.load_mnist(reshape=True, twoclass=None, binary=True, onehot=False)
 
-    z, _ = encoder(X)
-    z = Variable(z, requires_grad=True).to(device)
-    
-    z_solver = optim.Adam([z], lr=z_lr)
-    
-    k = 0
-    iter_num = 20000
-    
-    for it in range(iter_num + 1):
-        z_solver.zero_grad()
-
-        # Forward
-        y2 = classifier(z)
-        D = discriminator(z)
-        X_hat = generator(z)
-        y1 = f1(X_hat)
-
-        # loss
-        J1 = nn.CrossEntropyLoss()(y1, y)
-        J2 = nn.CrossEntropyLoss()(y2, y)
-        J_IT = J2 + 0.01 * torch.mean(1 - torch.sigmoid(D)) + 0.0001 * torch.mean(torch.norm(z, dim=1))
-        J_SA = J_IT + k * J1
-        k = k + z_lr * (0.001 * J1.item() - J2.item() + max(J1.item() - J1_hat, 0))
-        k = max(0, min(k, 0.005))
+    if len(sys.argv) > 3:
+        test_img_index = int(sys.argv[2])
+        target_img_label = int(sys.argv[3])
         
-        if (it % 1000 == 0):
-            print('iter-%d: J_SA: %.4f, J_IT: %.4f, J1: %.4f' % (it, J_SA.item(), J_IT.item(), J1.item()))
-            img = torch.squeeze(X_hat).data.cpu().numpy()
-            img = np.repeat(img[..., np.newaxis], 3, axis=2)
-            plt.imsave('attack/mnist/iter-%d.png' % (it), img)
+        test_label = y_test[test_img_index]
 
-        # Backward
-        J_SA.backward()
+        test_img = x_test[test_img_index, ...]
+        true_label = np.zeros(shape=[1, ])
+        true_label[0] = test_label
 
-        # Update
-        z_solver.step()
+        print('Original Label: %d' % (test_label))
+
+        target_label = np.zeros(shape=[1, ])
+        target_label[0] = target_img_label
+
+        print('Target Label: %d' % (target_img_label))
+        
+        img = np.repeat(test_img.transpose((1,2,0)), 3, axis=2)
+        plt.imsave('attack/mnist/test.png', img)
+
+        X, y = torch.from_numpy(np.expand_dims(test_img, 0)).float().to(device), torch.from_numpy(true_label).long().to(device)
+        y_hat = torch.from_numpy(target_label).long().to(device)
+
+        z, _ = encoder(X)
+        z = Variable(z, requires_grad=True).to(device)
+        
+        z_solver = optim.Adam([z], lr=z_lr)
+
+        k = 0
+        iter_num = 20000
+        
+        for it in range(iter_num + 1):
+            z_solver.zero_grad()
+
+            # Forward
+            y2 = classifier(z)
+            D = discriminator(z)
+            X_hat = generator(z)
+            y1 = f1(X_hat)
+
+            # loss
+            J1 = nn.CrossEntropyLoss()(y1, y)
+            J2 = nn.CrossEntropyLoss()(y2, y_hat)
+            J_IT = J2 + 0.01 * torch.mean(1 - torch.sigmoid(D)) + 0.0001 * torch.mean(torch.norm(z, dim=1))
+            J_SA = J_IT + k * J1
+            k = k + z_lr * (0.001 * J1.item() - J2.item() + max(J1.item() - J1_hat, 0))
+            k = max(0, min(k, 0.005))
+            
+            if (it % 1000 == 0):
+                print('iter-%d: J_SA: %.6f, J_IT: %.6f, J1: %.6f' % (it, J_SA.item(), J_IT.item(), J1.item()))
+                img = torch.squeeze(X_hat).data.cpu().numpy()
+                img = np.repeat(img[..., np.newaxis], 3, axis=2)
+                plt.imsave('attack/mnist/iter-%d.png' % (it), img)
+
+            # Backward
+            J_SA.backward()
+
+            # Update
+            z_solver.step()
+    
+    else:
+        if not os.path.exists('attack/mnist/data/'):
+            os.makedirs('attack/mnist/data/')
+
+        for label in range(classes):
+            if not os.path.exists('attack/mnist/data/' + str(label) + '/'):
+                os.makedirs('attack/mnist/data/' + str(label) + '/')
+
+        n_train_samples = x_train.shape[0]
+        total_train_batch = n_train_samples // batch_size
+
+        for i in range(total_train_batch):
+            # Compute the offset of the current minibatch in the data.
+            offset = (i * batch_size) % n_train_samples
+            batch_test_img = x_train[offset:(offset + batch_size), ...]
+            batch_test_label = y_train[offset:(offset + batch_size), ...]
+
+            print('Batch %d, Original Labels:' % (i))
+            print(batch_test_label.tolist())
+
+            batch_target_label = (batch_test_label + 1) % classes
+
+            print('Batch %d, Target Labels:' % (i))
+            print(batch_target_label.tolist())
+
+            X, y = torch.from_numpy(batch_test_img).float().to(device), torch.from_numpy(batch_test_label).long().to(device)
+            y_hat = torch.from_numpy(batch_target_label).long().to(device)
+
+            z, _ = encoder(X)
+            z = Variable(z, requires_grad=True).to(device)
+            
+            z_solver = optim.Adam([z], lr=z_lr)
+            
+            k = 0
+            iter_num = 20000
+            
+            for it in range(iter_num + 1):
+                z_solver.zero_grad()
+
+                # Forward
+                y2 = classifier(z)
+                D = discriminator(z)
+                X_hat = generator(z)
+                y1 = f1(X_hat)
+
+                # loss
+                J1 = nn.CrossEntropyLoss()(y1, y)
+                J2 = nn.CrossEntropyLoss()(y2, y_hat)
+                J_IT = J2 + 0.01 * torch.mean(1 - torch.sigmoid(D)) + 0.0001 * torch.mean(torch.norm(z, dim=1))
+                J_SA = J_IT + k * J1
+                k = k + z_lr * (0.001 * J1.item() - J2.item() + max(J1.item() - J1_hat, 0))
+                k = max(0, min(k, 0.005))
+                
+                '''
+                if (it % 1000 == 0):
+                    print('iter-%d: J_SA: %.6f, J_IT: %.6f, J1: %.6f' % (it, J_SA.item(), J_IT.item(), J1.item()))
+                '''
+                
+                if (it == iter_num):
+                    samples = X_hat.permute(0, 2, 3, 1).data.cpu().numpy()
+
+                    for ind in range(batch_size):
+                        img = np.repeat(samples[ind], 3, axis=2)
+                        plt.imsave('attack/mnist/data/%d/%d.png' % (batch_target_label[ind], i * batch_size + ind), img)
+
+
+                # Backward
+                J_SA.backward()
+
+                # Update
+                z_solver.step()
     
 else:
     print('Usage: python svae_mnist.py train')
+    print('       python svae_mnist.py generate')
     print('       python svae_mnist.py generate test_index target_label')
     exit(0)
