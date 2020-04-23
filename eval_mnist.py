@@ -12,20 +12,42 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 torch.cuda.empty_cache()
 
-class Classifier(nn.Module):
+class CNN(nn.Module):
     def __init__(self):
-        super(Classifier, self).__init__()
-        
-        self.fc1 = nn.Linear(28 * 28, 128)
-        self.fc2 = nn.Linear(128, 10)
+        super(CNN, self).__init__()
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(1, 6, 5, 1, 2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2)
+        )
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(6, 16, 5),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2)
+        )
+        self.fc1 = nn.Sequential(
+            nn.Linear(16 * 5 * 5, 120),
+            nn.ReLU(inplace=True)
+        )
+        self.fc2 = nn.Sequential(
+            nn.Linear(120, 84),
+            nn.ReLU(inplace=True)
+        )
+        self.fc3 = nn.Linear(84, 15)
 
     def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)
         x = x.view(x.size()[0], -1)
-        x = F.relu(self.fc1(x))
+        x = self.fc1(x)
         x = self.fc2(x)
+        x = self.fc3(x)
         return x
 
-f1 = Classifier().to(device)
+# f1 = MLP().to(device)
+f1 = CNN().to(device)
+
 f1.load_state_dict(torch.load('out/mnist/f1_best_178.pth'))
 
 test_path = 'attack/mnist/data_1/'
