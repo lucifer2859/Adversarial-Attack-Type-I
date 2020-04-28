@@ -7,7 +7,6 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 import os
 import sys
 
@@ -52,9 +51,9 @@ if len(sys.argv) < 2:
     print('       python svae_mnist.py generate test_index target_label')
     exit(0)
 
-class Classifier(nn.Module):
+class MLP(nn.Module):
     def __init__(self):
-        super(Classifier, self).__init__()
+        super(MLP, self).__init__()
         
         self.fc1 = nn.Linear(28 * 28, 128)
         self.fc2 = nn.Linear(128, 10)
@@ -65,7 +64,7 @@ class Classifier(nn.Module):
         x = self.fc2(x)
         return x
 
-f1 = Classifier().to(device)
+f1 = MLP().to(device)
 
 encoder, generator, classifier, discriminator = mnist_model.build_MNIST_Model(dim_z)
 encoder = encoder.to(device)
@@ -206,17 +205,12 @@ if sys.argv[1] == 'train':
 
 
         print('-----------------------------------------------------------------')
-        
-        torch.save(encoder.state_dict(), 'out/mnist/encoder.pth')
-        torch.save(classifier.state_dict(), 'out/mnist/classifier.pth')
-        torch.save(generator.state_dict(), 'out/mnist/generator.pth')
 
 # =============================== Stage2 TRAINING =============================
 
     if stage_flag[1]:
+        encoder.load_state_dict(torch.load('out/mnist/encoder_best_%d.pth'  % (best_epoch) ))
         best_epoch = -1
-        
-        encoder.load_state_dict(torch.load('out/mnist/encoder.pth'))
 
         for p in encoder.parameters():
             p.requires_grad = False
@@ -346,7 +340,7 @@ elif sys.argv[1] == 'generate':
 
         print('Target Label: %d' % (target_img_label))
         
-        img = np.repeat(test_img.transpose((1,2,0)), 3, axis=2)
+        img = np.repeat(test_img.transpose((1, 2, 0)), 3, axis=2)
         plt.imsave('attack/mnist/test.png', img)
 
         X, y = torch.from_numpy(np.expand_dims(test_img, 0)).float().to(device), torch.from_numpy(true_label).long().to(device)

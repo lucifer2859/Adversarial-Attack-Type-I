@@ -3,9 +3,6 @@ import cv2
 import numpy as np
 from keras.utils import to_categorical
 
-def deprocess(x):
-    return np.reshape((x * 255.0), (-1, 64, 64, 3)).astype(np.uint8)
-
 def preprocess(x):
     return x.astype(np.float) / 255.0
 

@@ -16,7 +16,7 @@ EPSILON = 1e-6
 
 IMAGE_SIZE = 28
 
-epoch_num = 600
+epoch_num = 100
 batch_size = 64
 classes = 10
 lr = 0.00035
@@ -33,18 +33,18 @@ if not os.path.exists('attack/'):
 if not os.path.exists('attack/mnist/'):
     os.makedirs('attack/mnist/')
 
-# class MLP(nn.Module):
-#     def __init__(self):
-#         super(Classifier, self).__init__()
+class MLP(nn.Module):
+    def __init__(self):
+        super(MLP, self).__init__()
         
-#         self.fc1 = nn.Linear(28 * 28, 128)
-#         self.fc2 = nn.Linear(128, 10)
+        self.fc1 = nn.Linear(28 * 28, 128)
+        self.fc2 = nn.Linear(128, 10)
 
-#     def forward(self, x):
-#         x = x.view(x.size()[0], -1)
-#         x = F.relu(self.fc1(x))
-#         x = self.fc2(x)
-#         return x
+    def forward(self, x):
+        x = x.view(x.size()[0], -1)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
 
 class CNN(nn.Module):
     def __init__(self):
@@ -68,7 +68,7 @@ class CNN(nn.Module):
             nn.Linear(120, 84),
             nn.ReLU(inplace=True)
         )
-        self.fc3 = nn.Linear(84, 15)
+        self.fc3 = nn.Linear(84, 10)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -138,8 +138,7 @@ for epoch in range(0, epoch_num):
 
             y_hat = f1(X)
 
-            # Loss
-            classify_loss = nn.CrossEntropyLoss()(y_hat, y)
+            loss = nn.CrossEntropyLoss()(y_hat, y)
             _, predicted = torch.max(y_hat.data, 1)
             acc = torch.mean(torch.eq(predicted, y).float())
 

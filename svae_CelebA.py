@@ -7,7 +7,6 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 import os
 import ssl
 import sys
@@ -208,17 +207,12 @@ if sys.argv[1] == 'train':
 
 
         print('-----------------------------------------------------------------')
-        
-        torch.save(encoder.state_dict(), 'out/CelebA/encoder.pth')
-        torch.save(classifier.state_dict(), 'out/CelebA/classifier.pth')
-        torch.save(generator.state_dict(), 'out/CelebA/generator.pth')
 
 # =============================== Stage2 TRAINING =============================
 
     if stage_flag[1]:
+        encoder.load_state_dict(torch.load('out/CelebA/encoder_best_%d.pth'  % (best_epoch) ))
         best_epoch = -1
-        
-        encoder.load_state_dict(torch.load('out/CelebA/encoder.pth'))
 
         for p in encoder.parameters():
             p.requires_grad = False
@@ -304,8 +298,6 @@ if sys.argv[1] == 'train':
 
         print('-----------------------------------------------------------------')
 
-        torch.save(discriminator.state_dict(), 'out/CelebA/discriminator.pth')
-
 elif sys.argv[1] == 'generate':
     test_img_index = int(sys.argv[2])
     _, _, x_test, y_test = CelebA_data.load_celebA_Gender(data_dir='/home/dchen/dataset/CelebA/GenderSplit', test_only=True)
@@ -320,7 +312,7 @@ elif sys.argv[1] == 'generate':
     target_label[0, 0] = target_img_label
     print("target_label is ", get_string(target_img_label))
     
-    img = test_img.transpose((1,2,0))
+    img = test_img.transpose((1, 2, 0))
     plt.imsave('attack/CelebA/test.png', img)
 
     encoder.load_state_dict(torch.load('out/CelebA/encoder.pth'))

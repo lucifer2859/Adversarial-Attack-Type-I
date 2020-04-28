@@ -8,13 +8,8 @@ import torch
 
 batch_size = 64
 
-def deprocess(x):
-    return np.reshape((x * 255.0), (-1, 28, 28)).astype(np.uint8)
-
-
 def preprocess(x):
     return x.astype(np.float) / 255.0
-
 
 def split_two_class(x, y, twoclass):
     id1 = np.where(y == twoclass[0])[0]
@@ -26,7 +21,6 @@ def split_two_class(x, y, twoclass):
     y[0: id1.shape[0]] = 0
 
     return x, y
-
 
 def load_mnist(reshape=True, onehot=True, twoclass=None, binary=False, prep=True):
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
@@ -62,7 +56,6 @@ def load_mnist(reshape=True, onehot=True, twoclass=None, binary=False, prep=True
         x_test = preprocess(x_test)
 
     return x_train, y_train, x_test, y_test
-
 
 def load_data(data_path, binary=False, prep=True):
     data_pairs =[]
