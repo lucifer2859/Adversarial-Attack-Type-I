@@ -19,17 +19,19 @@ import cifar_data
 from models import *
 import itertools
 
+import pytorch_msssim
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 torch.cuda.empty_cache()
 
 EPSILON = 1e-6
 
-epoch_num = [600, 200]
+epoch_num = [600, 600]
 pretrain_epoch_num = [-1, -1]
 stage_flag = [True, True]
 batch_size = 64
-dim_z = 512
+dim_z = 1024
 classes = ['plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 lr = 0.0002
 z_lr = 0.005
@@ -42,12 +44,6 @@ transform_train = transforms.Compose([
 transform_test = transforms.Compose([
     transforms.ToTensor()
 ])
-
-trainset = torchvision.datasets.CIFAR10(root='/home/dchen/dataset', train=True, download=True, transform=transform_train)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
-
-testset = torchvision.datasets.CIFAR10(root='/home/dchen/dataset', train=False, download=True, transform=transform_test)
-testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
 
 if not os.path.exists('out/'):
     os.makedirs('out/')
@@ -64,6 +60,7 @@ if not os.path.exists('attack/cifar/'):
 if len(sys.argv) < 2:
     print('Usage: python svae_cifar.py train')
     print('       python svae_cifar.py generate')
+    print('       python svae_cifar.py generate test_index target_label')
     exit(0)
 
 f1 =  MobileNetV2()
@@ -91,9 +88,13 @@ stage2_params = discriminator.parameters()
 if sys.argv[1] == 'train':
 # =============================== TRAINING ====================================
 
-    # stage1_solver = optim.Adam(stage1_params, lr=lr)
-    stage1_solver = optim.Adam(stage1_params, lr=lr, betas=(0.5, 0.999))
-    # stage2_solver = optim.Adam(stage2_params, lr=lr)
+    trainset = torchvision.datasets.CIFAR10(root='/home/dchen/dataset', train=True, download=True, transform=transform_train)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
+
+    testset = torchvision.datasets.CIFAR10(root='/home/dchen/dataset', train=False, download=True, transform=transform_test)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+
+    stage1_solver = optim.Adam(stage1_params, lr=lr, betas=(0.5, 0.999), weight_decay=1e-4)
     stage2_solver = optim.Adam(stage2_params, lr=lr, betas=(0.5, 0.999))
 
     best_VAE_loss = 10000.
@@ -125,11 +126,17 @@ if sys.argv[1] == 'train':
 
                 # Loss
                 classify_loss = nn.CrossEntropyLoss()(y_hat, y)
-                recon_loss = nn.MSELoss(reduction='sum')(X_hat, X) / X.size()[0]
+                mse_loss = nn.MSELoss(reduction='sum')(X_hat, X) / X.size()[0]
+                msssim_loss = 1. - pytorch_msssim.msssim(X_hat, X)
                 kl_loss = torch.mean(0.5 * torch.sum(z_mu ** 2 + z_sigma ** 2 - torch.log(EPSILON + z_sigma ** 2) - 1., 1))
-                loss = classify_loss + recon_loss + kl_loss        
+                
+                loss = None
 
-                # Backward
+                if (msssim_loss.item() < 0.3):
+                    loss = classify_loss + msssim_loss + kl_loss        
+                else:
+                    loss = classify_loss + mse_loss + kl_loss        
+                
                 loss.backward()
 
                 # Update
@@ -137,7 +144,7 @@ if sys.argv[1] == 'train':
 
             with torch.no_grad():
                 # validate after each epoch
-                val_loss, val_cla, val_rec, val_kl, val_acc = 0., 0., 0., 0., 0.
+                val_loss, val_cla, val_mse, val_msssim, val_kl, val_acc = 0., 0., 0., 0., 0., 0.
 
                 for X, y in testloader:
                     X, y = X.to(device), y.to(device)
@@ -149,21 +156,31 @@ if sys.argv[1] == 'train':
 
                     # Loss
                     classify_loss = nn.CrossEntropyLoss()(y_hat, y)
-                    recon_loss = nn.MSELoss(reduction='sum')(X_hat, X) / X.size()[0]
+                    mse_loss = nn.MSELoss(reduction='sum')(X_hat, X) / X.size()[0]
+                    msssim_loss = 1. - pytorch_msssim.msssim(X_hat, X)
                     kl_loss = torch.mean(0.5 * torch.sum(z_mu ** 2 + z_sigma ** 2 - torch.log(EPSILON + z_sigma ** 2) - 1., 1))
-                    loss = classify_loss + recon_loss + kl_loss
+                    
+                    loss = None
+
+                    if (msssim_loss.item() < 0.3):
+                        loss = classify_loss + msssim_loss + kl_loss        
+                    else:
+                        loss = classify_loss + mse_loss + kl_loss 
+
                     _, predicted = torch.max(y_hat.data, 1)
                     acc = torch.mean(torch.eq(predicted, y).float())
 
                     val_loss += loss.item()
                     val_cla += classify_loss.item()
-                    val_rec += recon_loss.item()
+                    val_mse += mse_loss.item()
+                    val_msssim += msssim_loss.item()
                     val_kl += kl_loss.item()
                     val_acc += acc.item()
 
-                print('val_loss:{:.6}, val_cla:{:.6}, val_rec:{:.6}, val_kl:{:.6}, val_acc:{:.4}'.format(val_loss / len(testloader),
+                print('val_loss:{:.6}, val_cla:{:.6}, val_mse:{:.6}, val_msssim:{:.6}, val_kl:{:.6}, val_acc:{:.4}'.format(val_loss / len(testloader),
                                                                                             val_cla / len(testloader),
-                                                                                            val_rec / len(testloader),
+                                                                                            val_mse / len(testloader),
+                                                                                            val_msssim / len(testloader),
                                                                                             val_kl / len(testloader),
                                                                                             val_acc / len(testloader)))
                 if (val_loss / len(testloader)) < best_VAE_loss:
@@ -223,6 +240,9 @@ if sys.argv[1] == 'train':
                 # Loss
                 loss = -torch.mean(torch.log(torch.sigmoid(D_real)) + torch.log(1 - torch.sigmoid(D_fake)))
 
+                if (torch.isnan(loss)):
+                    loss.zero_()
+
                 # Backward
                 loss.backward()
 
@@ -270,10 +290,10 @@ if sys.argv[1] == 'train':
         print('-----------------------------------------------------------------')
 
 elif sys.argv[1] == 'generate':
-    encoder.load_state_dict(torch.load('out/cifar/encoder_best_551.pth'))
-    generator.load_state_dict(torch.load('out/cifar/generator_best_551.pth'))
-    classifier.load_state_dict(torch.load('out/cifar/classifier_best_551.pth'))
-    discriminator.load_state_dict(torch.load('out/cifar/discriminator_best_544.pth'))
+    encoder.load_state_dict(torch.load('out/cifar/encoder_best_101.pth'))
+    generator.load_state_dict(torch.load('out/cifar/generator_best_101.pth'))
+    classifier.load_state_dict(torch.load('out/cifar/classifier_best_101.pth'))
+    discriminator.load_state_dict(torch.load('out/cifar/discriminator_best_251.pth'))
 
     mean = torch.Tensor([0.4914, 0.4822, 0.4465]).reshape((1, 3, 1, 1)).to(device)
     std = torch.Tensor([0.2023, 0.1994, 0.2010]).reshape((1, 3, 1, 1)).to(device)
@@ -293,65 +313,133 @@ elif sys.argv[1] == 'generate':
     for p in f1.parameters():
         p.requires_grad = False
 
-    if not os.path.exists('attack/cifar/data/'):
-        os.makedirs('attack/cifar/data/')
+    if len(sys.argv) > 3:
+        test_img_index = int(sys.argv[2])
+        target_img_label = int(sys.argv[3])
 
-    for label in classes:
-        if not os.path.exists('attack/cifar/data/' + label + '/'):
-            os.makedirs('attack/cifar/data/' + label + '/')
+        testset = torchvision.datasets.CIFAR10(root='/home/dchen/dataset', train=False, download=True, transform=transform_test)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False, num_workers=2)
 
-    iter_num = 20000
+        iter_num = 20000
 
-    for i, (X, y) in enumerate(testloader):
-        X, y = X.to(device), y.to(device)
+        for i, (X, y) in enumerate(testloader):
+            if i != test_img_index:
+                continue
 
-        y_hat = (y + 1) % len(classes)
+            X, y = X.to(device), y.to(device)
 
-        batch_target_label = y_hat.data.cpu().numpy()
+            img = torch.squeeze(X).permute(1, 2, 0).data.cpu().numpy()
+            plt.imsave('attack/cifar/test.png', img)
 
-        z, _ = encoder(X)
-        z = Variable(z, requires_grad=True).to(device)
-            
-        z_solver = optim.Adam([z], lr=z_lr)
-            
-        k = 0
-            
-        for it in range(iter_num + 1):
-            z_solver.zero_grad()
+            y_hat = torch.from_numpy(np.array([target_img_label])).long().to(device)
 
-            # Forward
-            y2 = classifier(z)
-            D = discriminator(z)
-            X_hat = generator(z)
-            X_hat_norm = (X_hat - mean) / std
-            y1 = f1(X_hat_norm)
+            print('Original Label: %s' % (classes[y.data.cpu().numpy()[0]]))
+            print('Target Label: %s' % (classes[target_img_label]))
 
-            # loss
-            J1 = nn.CrossEntropyLoss()(y1, y)
-            J2 = nn.CrossEntropyLoss()(y2, y_hat)
-            J_IT = J2 + 0.01 * torch.mean(1 - torch.sigmoid(D)) + 0.0001 * torch.mean(torch.norm(z, dim=1))
-            J_SA = J_IT + k * J1
-            k = k + z_lr * (0.001 * J1.item() - J2.item() + max(J1.item() - J1_hat, 0))
-            k = max(0, min(k, 0.005))
+            z, _ = encoder(X)
+            z = Variable(z, requires_grad=True).to(device)
                 
-            '''
-            if (it % 1000 == 0):
-                print('iter-%d: J_SA: %.6f, J_IT: %.6f, J1: %.6f' % (it, J_SA.item(), J_IT.item(), J1.item()))
-            '''
+            z_solver = optim.Adam([z], lr=z_lr)
                 
-            if (it == iter_num):
-                samples = X_hat.permute(0, 2, 3, 1).data.cpu().numpy()
+            k = 0
+                
+            for it in range(iter_num + 1):
+                z_solver.zero_grad()
 
-                for ind in range(X.size()[0]):
-                    plt.imsave('attack/cifar/data/%s/%d.png' % (classes[batch_target_label[ind]], i * batch_size + ind), samples[ind])
+                # Forward
+                y2 = classifier(z)
+                D = discriminator(z)
+                X_hat = generator(z)
+                X_hat_norm = (X_hat - mean) / std
+                y1 = f1(X_hat_norm)
 
-            # Backward
-            J_SA.backward()
+                # loss
+                J1 = nn.CrossEntropyLoss()(y1, y)
+                J2 = nn.CrossEntropyLoss()(y2, y_hat)
+                J_IT = J2 + 0.01 * torch.mean(1 - torch.sigmoid(D)) + 0.0001 * torch.mean(torch.norm(z, dim=1))
+                J_SA = J_IT + k * J1
+                k = k + z_lr * (0.001 * J1.item() - J2.item() + max(J1.item() - J1_hat, 0))
+                k = max(0, min(k, 0.005))
+                    
 
-            # Update
-            z_solver.step()
+                if (it % 1000 == 0):
+                    print('iter-%d: J_SA: %.6f, J_IT: %.6f, J1: %.6f' % (it, J_SA.item(), J_IT.item(), J1.item()))
+                    img = torch.squeeze(X_hat).permute(1, 2, 0).data.cpu().numpy()
+
+                    plt.imsave('attack/cifar/iter-%d.png' % (it), img)
+
+                # Backward
+                J_SA.backward()
+
+                # Update
+                z_solver.step()
+
+            break
+
+    else:
+        testset = torchvision.datasets.CIFAR10(root='/home/dchen/dataset', train=False, download=True, transform=transform_test)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+
+        if not os.path.exists('attack/cifar/data/'):
+            os.makedirs('attack/cifar/data/')
+
+        for label in classes:
+            if not os.path.exists('attack/cifar/data/' + label + '/'):
+                os.makedirs('attack/cifar/data/' + label + '/')
+
+        iter_num = 20000
+
+        for i, (X, y) in enumerate(testloader):
+            X, y = X.to(device), y.to(device)
+
+            y_hat = (y + 1) % len(classes)
+
+            batch_target_label = y_hat.data.cpu().numpy()
+
+            z, _ = encoder(X)
+            z = Variable(z, requires_grad=True).to(device)
+                
+            z_solver = optim.Adam([z], lr=z_lr)
+                
+            k = 0
+                
+            for it in range(iter_num + 1):
+                z_solver.zero_grad()
+
+                # Forward
+                y2 = classifier(z)
+                D = discriminator(z)
+                X_hat = generator(z)
+                X_hat_norm = (X_hat - mean) / std
+                y1 = f1(X_hat_norm)
+
+                # loss
+                J1 = nn.CrossEntropyLoss()(y1, y)
+                J2 = nn.CrossEntropyLoss()(y2, y_hat)
+                J_IT = J2 + 0.01 * torch.mean(1 - torch.sigmoid(D)) + 0.0001 * torch.mean(torch.norm(z, dim=1))
+                J_SA = J_IT + k * J1
+                k = k + z_lr * (0.001 * J1.item() - J2.item() + max(J1.item() - J1_hat, 0))
+                k = max(0, min(k, 0.005))
+                    
+                '''
+                if (it % 1000 == 0):
+                    print('iter-%d: J_SA: %.6f, J_IT: %.6f, J1: %.6f' % (it, J_SA.item(), J_IT.item(), J1.item()))
+                '''
+                    
+                if (it == iter_num):
+                    samples = X_hat.permute(0, 2, 3, 1).data.cpu().numpy()
+
+                    for ind in range(X.size()[0]):
+                        plt.imsave('attack/cifar/data/%s/%d.png' % (classes[batch_target_label[ind]], i * batch_size + ind), samples[ind])
+
+                # Backward
+                J_SA.backward()
+
+                # Update
+                z_solver.step()
     
 else:
     print('Usage: python svae_cifar.py train')
     print('       python svae_cifar.py generate')
+    print('       python svae_cifar.py generate test_index target_label')
     exit(0)

@@ -19,8 +19,8 @@ class Encoder(nn.Module):
         self.conv5 = nn.Conv2d(128, 128, 5, 1, 2)
         self.conv6 = nn.Conv2d(128, 256, 5, 2, 2)
         self.bn3 = nn.BatchNorm2d(256)
-        self.fc1 = nn.Linear(256 * 4 * 4, 1024)
-        self.fc2 = nn.Linear(1024, dim_z * 2)
+        self.fc1 = nn.Linear(256 * 4 * 4, 2048)
+        self.fc2 = nn.Linear(2048, dim_z * 2)
 
     def forward(self, x):
         dim_z = self.dim_z
@@ -39,8 +39,8 @@ class Generator(nn.Module):
     def __init__(self, dim_z):
         super(Generator, self).__init__()
 
-        self.fc1 = nn.Linear(dim_z, 1024)
-        self.fc2 = nn.Linear(1024, 256 * 4 * 4)
+        self.fc1 = nn.Linear(dim_z, 2048)
+        self.fc2 = nn.Linear(2048, 256 * 4 * 4)
         self.bn1 = nn.BatchNorm2d(256)
         self.conv1 = nn.Conv2d(256, 128, 5, 1, 2)
         self.conv2 = nn.Conv2d(128, 128, 5, 1, 2)
@@ -98,5 +98,5 @@ class Discriminator(nn.Module):
         return x
 
 
-def build_CIFAR_Model(dim_z=512):
+def build_CIFAR_Model(dim_z=1024):
     return Encoder(dim_z), Generator(dim_z), Classifier(dim_z), Discriminator(dim_z)
