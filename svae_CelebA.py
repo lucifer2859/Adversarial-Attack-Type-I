@@ -86,9 +86,7 @@ stage2_params = discriminator.parameters()
 if sys.argv[1] == 'train':
 # =============================== TRAINING ====================================
 
-    # stage1_solver = optim.Adam(stage1_params, lr=lr)
     stage1_solver = optim.Adam(stage1_params, lr=lr, betas=(0.5, 0.999), weight_decay=1e-4)
-    # stage2_solver = optim.Adam(stage2_params, lr=lr)
     stage2_solver = optim.Adam(stage2_params, lr=lr, betas=(0.5, 0.999))
 
     best_VAE_loss = 1000.

@@ -24,9 +24,10 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
-net =  MobileNetV2()
+# net =  MobileNetV2()
+net = DPN92()
 net_name = net.name
-save_path = 'out/cifar/{0}_ckpt.pth'.format(net.name)
+save_path = 'out/cifar/f1_{0}.pth'.format(net.name)
 net = net.to(device)
 
 checkpoint = torch.load(save_path)

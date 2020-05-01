@@ -4,7 +4,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
-import torch.backends.cudnn as cudnn
 import os
 import sys
 sys.path.insert(0, "/home/dchen/SVAE/classification-cifar10-pytorch/")
@@ -53,9 +52,10 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship'
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
-net =  MobileNetV2()
+# net =  MobileNetV2()
+net = DPN92()
 net_name = net.name
-save_path = 'out/cifar/{0}_ckpt.pth'.format(net.name)
+save_path = 'out/cifar/f1_{0}.pth'.format(net.name)
 net = net.to(device)
 
 criterion = nn.CrossEntropyLoss()
@@ -114,8 +114,6 @@ def test(epoch):
             'acc': acc,
             'epoch': epoch,
         }
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
         torch.save(state, save_path)
         best_acc = acc
 
@@ -126,6 +124,6 @@ for epoch in range(start_epoch, 300):
     # `optimizer.step()` before `lr_scheduler.step()`
     train(epoch)
     test(epoch)
-    scheduler.step()  # 每隔100 steps学习率乘以0.1
+    scheduler.step() 
 
 print("\nTesting best accuracy:", best_acc)

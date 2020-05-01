@@ -5,7 +5,6 @@ import torch.optim as optim
 from torch.autograd import Variable
 import torchvision
 import torchvision.transforms as transforms
-import torch.backends.cudnn as cudnn
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -14,12 +13,16 @@ import os
 import sys
 sys.path.insert(0, "/home/dchen/SVAE/classification-cifar10-pytorch/")
 
-import cifar_model
+import cifar_model_v1
+import cifar_model_v2
 import cifar_data
 from models import *
 import itertools
 
 import pytorch_msssim
+
+import warnings
+warnings.filterwarnings("ignore")
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -71,11 +74,8 @@ f1 = f1.to(device)
 checkpoint = torch.load(save_path)
 f1.load_state_dict(checkpoint['net'])
 
-encoder, generator, classifier, discriminator = cifar_model.build_CIFAR_Model(dim_z)
-encoder = encoder.to(device)
-generator = generator.to(device)
-classifier = classifier.to(device)
-discriminator = discriminator.to(device)
+encoder, generator, classifier, discriminator = cifar_model_v1.build_CIFAR_Model(dim_z, device=device)
+# encoder, generator, classifier, discriminator = cifar_model_v2.build_CIFAR_Model(dim_z, device=device)
 
 # For a MobileNetV2 model (f1) pretrained on CIFAR-10
 
@@ -290,10 +290,10 @@ if sys.argv[1] == 'train':
         print('-----------------------------------------------------------------')
 
 elif sys.argv[1] == 'generate':
-    encoder.load_state_dict(torch.load('out/cifar/encoder_best_101.pth'))
-    generator.load_state_dict(torch.load('out/cifar/generator_best_101.pth'))
-    classifier.load_state_dict(torch.load('out/cifar/classifier_best_101.pth'))
-    discriminator.load_state_dict(torch.load('out/cifar/discriminator_best_251.pth'))
+    encoder.load_state_dict(torch.load('out/cifar/encoder_best_75.pth'))
+    generator.load_state_dict(torch.load('out/cifar/generator_best_75.pth'))
+    classifier.load_state_dict(torch.load('out/cifar/classifier_best_75.pth'))
+    discriminator.load_state_dict(torch.load('out/cifar/discriminator_best_553.pth'))
 
     mean = torch.Tensor([0.4914, 0.4822, 0.4465]).reshape((1, 3, 1, 1)).to(device)
     std = torch.Tensor([0.2023, 0.1994, 0.2010]).reshape((1, 3, 1, 1)).to(device)

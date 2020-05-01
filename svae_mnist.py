@@ -64,7 +64,41 @@ class MLP(nn.Module):
         x = self.fc2(x)
         return x
 
-f1 = MLP().to(device)
+class CNN(nn.Module):
+    def __init__(self):
+        super(CNN, self).__init__()
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(1, 6, 5, 1, 2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2)
+        )
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(6, 16, 5),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2)
+        )
+        self.fc1 = nn.Sequential(
+            nn.Linear(16 * 5 * 5, 120),
+            nn.ReLU(inplace=True)
+        )
+        self.fc2 = nn.Sequential(
+            nn.Linear(120, 84),
+            nn.ReLU(inplace=True)
+        )
+        self.fc3 = nn.Linear(84, 10)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = x.view(x.size()[0], -1)
+        x = self.fc1(x)
+        x = self.fc2(x)
+        x = self.fc3(x)
+        return x
+
+# f1 = MLP().to(device)
+f1 = CNN().to(device)
 
 encoder, generator, classifier, discriminator = mnist_model.build_MNIST_Model(dim_z)
 encoder = encoder.to(device)
@@ -72,7 +106,7 @@ generator = generator.to(device)
 classifier = classifier.to(device)
 discriminator = discriminator.to(device)
 
-# For a MLP model (f1) pretrained on MNIST
+# For a model (f1) pretrained on MNIST
 
 for p in f1.parameters():
     p.requires_grad = False
@@ -294,15 +328,13 @@ if sys.argv[1] == 'train':
 
         print('-----------------------------------------------------------------')
 
-        torch.save(discriminator.state_dict(), 'out/mnist/discriminator.pth')
-
 elif sys.argv[1] == 'generate':
     encoder.load_state_dict(torch.load('out/mnist/encoder_best_551.pth'))
     generator.load_state_dict(torch.load('out/mnist/generator_best_551.pth'))
     classifier.load_state_dict(torch.load('out/mnist/classifier_best_551.pth'))
     discriminator.load_state_dict(torch.load('out/mnist/discriminator_best_544.pth'))
 
-    f1.load_state_dict(torch.load('out/mnist/f1_best_178.pth'))
+    f1.load_state_dict(torch.load('out/mnist/f1_CNN.pth'))
 
     for p in encoder.parameters():
         p.requires_grad = False

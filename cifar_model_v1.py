@@ -98,5 +98,5 @@ class Discriminator(nn.Module):
         return x
 
 
-def build_CIFAR_Model(dim_z=1024):
-    return Encoder(dim_z), Generator(dim_z), Classifier(dim_z), Discriminator(dim_z)
+def build_CIFAR_Model(dim_z=1024, device=torch.device("cpu")):
+    return Encoder(dim_z).to(device), Generator(dim_z).to(device), Classifier(dim_z).to(device), Discriminator(dim_z).to(device)
