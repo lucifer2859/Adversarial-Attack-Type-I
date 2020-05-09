@@ -63,12 +63,14 @@ if not os.path.exists('attack/cifar/'):
 if len(sys.argv) < 2:
     print('Usage: python svae_cifar.py train')
     print('       python svae_cifar.py generate')
+    print('       python svae_cifar.py generate test_index')
     print('       python svae_cifar.py generate test_index target_label')
     exit(0)
 
-f1 =  MobileNetV2()
+# f1 =  MobileNetV2()
+f1 = DPN92()
 net_name = f1.name
-save_path = 'out/cifar/{0}_ckpt.pth'.format(f1.name)
+save_path = 'out/cifar/f1_{0}.pth'.format(f1.name)
 f1 = f1.to(device)
 
 checkpoint = torch.load(save_path)
@@ -132,7 +134,7 @@ if sys.argv[1] == 'train':
                 
                 loss = None
 
-                if (msssim_loss.item() < 0.3):
+                if (msssim_loss.item() < 0.4):
                     loss = classify_loss + msssim_loss + kl_loss        
                 else:
                     loss = classify_loss + mse_loss + kl_loss        
@@ -162,7 +164,7 @@ if sys.argv[1] == 'train':
                     
                     loss = None
 
-                    if (msssim_loss.item() < 0.3):
+                    if (msssim_loss.item() < 0.4):
                         loss = classify_loss + msssim_loss + kl_loss        
                     else:
                         loss = classify_loss + mse_loss + kl_loss 
@@ -437,9 +439,90 @@ elif sys.argv[1] == 'generate':
 
                 # Update
                 z_solver.step()
+
+elif sys.argv[1] == 'generateNoise':
+    encoder.load_state_dict(torch.load('out/cifar/encoder_best_13.pth'))
+    generator.load_state_dict(torch.load('out/cifar/generator_best_13.pth'))
+    classifier.load_state_dict(torch.load('out/cifar/classifier_best_13.pth'))
+
+    mean = torch.Tensor([0.4914, 0.4822, 0.4465]).reshape((1, 3, 1, 1)).to(device)
+    std = torch.Tensor([0.2023, 0.1994, 0.2010]).reshape((1, 3, 1, 1)).to(device)
+
+    for p in encoder.parameters():
+        p.requires_grad = False
+
+    for p in generator.parameters():
+        p.requires_grad = False
+
+    for p in classifier.parameters():
+        p.requires_grad = False
+
+    for p in f1.parameters():
+        p.requires_grad = False
+
+    if len(sys.argv) > 2:
+        test_img_index = int(sys.argv[2])
+
+        testset = torchvision.datasets.CIFAR10(root='/home/dchen/dataset', train=False, download=True, transform=transform_test)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False, num_workers=2)
+
+        iter_num = 20000
+
+        for i, (X, y) in enumerate(testloader):
+            if i != test_img_index:
+                continue
+
+            X, y = X.to(device), y.to(device)
+
+            img = torch.squeeze(X).permute(1, 2, 0).data.cpu().numpy()
+            plt.imsave('attack/cifar/test.png', img)
+
+            print('Label: %s' % (classes[y.data.cpu().numpy()[0]]))
+
+            z, _ = encoder(X)
+            z_ori = z.clone().detach()
+            z = Variable(z, requires_grad=True).to(device)
+                
+            z_solver = optim.Adam([z], lr=z_lr)
+                
+            k = 0
+                
+            for it in range(iter_num + 1):
+                z_solver.zero_grad()
+
+                # Forward
+                y2 = classifier(z)
+                X_hat = generator(z)
+                X_hat_norm = (X_hat - mean) / std
+                y1 = f1(X_hat_norm)
+
+                # loss
+                J1 = nn.CrossEntropyLoss()(y1, y)
+                # J2 = F.relu(2. - torch.mean(torch.norm(z - z_ori, p=1, dim=1)) / z.size()[1])
+                J2 = F.relu(2. - nn.MSELoss(size_average=True)(X_hat, X))
+                J_SA = J2 + k * J1
+                k = k + z_lr * (0.001 * J1.item() - J2.item() + max(J1.item() - J1_hat, 0))
+                k = max(0, min(k, 0.005))
+
+                if (it % 1000 == 0):
+                    dev = torch.mean(torch.norm((z - z_ori) / z_ori, dim=1)) / z.size()[1]
+                    print('iter-%d: J_SA: %.6f, J1: %.6f, J2: %.6f, dev: %.6f' % (it, J_SA.item(), J1.item(), J2.item(), dev.item()))
+                    img = torch.squeeze(X_hat).permute(1, 2, 0).data.cpu().numpy()
+
+                    plt.imsave('attack/cifar/iter-%d.png' % (it), img)
+
+                # Backward
+                J_SA.backward()
+
+                # Update
+                z_solver.step()
+
+            break
     
 else:
     print('Usage: python svae_cifar.py train')
     print('       python svae_cifar.py generate')
     print('       python svae_cifar.py generate test_index target_label')
+    print('       python svae_cifar.py generateNoise')
+    print('       python svae_cifar.py generateNoise test_index')
     exit(0)

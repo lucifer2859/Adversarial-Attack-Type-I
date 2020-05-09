@@ -11,7 +11,7 @@ import os
 import ssl
 import sys
 
-import CelebA_model
+import CelebA_model_v1
 import CelebA_data
 import itertools
 from PIL import Image
@@ -54,7 +54,7 @@ if len(sys.argv) < 2:
     print('       python svae_CelebA.py generate test_index')
     exit(0)
 
-encoder, generator, classifier, discriminator = CelebA_model.build_CelebA_Model(dim_z)
+encoder, generator, classifier, discriminator = CelebA_model_v1.build_CelebA_Model(dim_z)
 encoder = encoder.to(device)
 generator = generator.to(device)
 classifier = classifier.to(device)
@@ -95,7 +95,7 @@ if sys.argv[1] == 'train':
     best_epoch = -1
 
     print('loading celebA dataset ...')
-    x_train, y_train, x_test, y_test = CelebA_data.load_celebA_Gender(data_dir='/home/dchen/dataset/CelebA/GenderSplit')
+    x_train, y_train, x_test, y_test = CelebA_data.load_celebA_Gender()
     print('done!')
 
     n_train_samples = x_train.shape[0]

@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
-import torch.backends.cudnn as cudnn
 import sys
 sys.path.insert(0, "/home/dchen/SVAE/classification-cifar10-pytorch/")
 
